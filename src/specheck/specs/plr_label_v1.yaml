@@ -1,0 +1,18 @@
+spec: plr_label_v1
+version: "0.1"
+# Starter spec, checked against 12 real DailyMed labels (see README).
+# Starter spec. LOINC section codes must be verified against real DailyMed labels
+# and the FDA SPL implementation guide before relying on them.
+rules:
+  - {id: FLD-001, type: field_present, field: setId, message: "Document setId is required", reference: "FDA SPL Implementation Guide"}
+  - {id: FLD-002, type: field_present, field: versionNumber, message: "Version number is required"}
+  - {id: FLD-003, type: field_present, field: effectiveTime, message: "Effective time is required"}
+  - {id: SEC-001, type: section_present, code: "34067-9", message: "Indications and Usage section is required", reference: "21 CFR 201.57(c)(2)"}
+  - {id: SEC-002, type: section_present, code: "34068-7", message: "Dosage and Administration section is required", reference: "21 CFR 201.57(c)(3)"}
+  - {id: SEC-003, type: section_present, code: "34070-3", message: "Contraindications section is required", reference: "21 CFR 201.57(c)(5)"}
+  - {id: SEC-004, type: section_present, code: ["43685-7", "34071-1"], message: "Warnings and Precautions (PLR) or Warnings (non-PLR) section is required", reference: "21 CFR 201.57(c)(6)"}
+  - {id: SEC-005, type: section_present, code: "34084-4", message: "Adverse Reactions section is required", reference: "21 CFR 201.57(c)(7)"}
+  - {id: SEC-006, type: section_present, code: "34066-1", message: "Boxed Warning section (only applicable to some drugs)", severity: info}
+  - {id: ORD-001, type: section_order, applies_if_section: "43685-7", codes: ["34067-9", "34068-7", "34070-3", ["43685-7", "34071-1"], "34084-4"], message: "Required sections must appear in PLR order", reference: "21 CFR 201.57(c)"}
+  - {id: TXT-001, type: text_not_empty, code: "34068-7", message: "Dosage section must not be empty"}
+  - {id: DOS-001, type: regex_in_section, code: "34068-7", pattern: '\d+(\.\d+)?\s*(mg|mcg|g|mL|units?)\b', message: "Dosage section should state a dose with a unit", severity: warning}

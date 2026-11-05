@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "specheck"
+version = "0.1.0"
+description = "Rule-based verification of pharma documentation (SPL drug labels) against a machine-readable spec"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["lxml>=5", "pyyaml>=6", "typer>=0.12", "jinja2>=3.1"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+ui = ["streamlit>=1.35", "pandas>=2"]
+
+[project.scripts]
+specheck = "specheck.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+specheck = ["templates/*.html", "specs/*.yaml"]
+
+[tool.ruff]
+line-length = 100

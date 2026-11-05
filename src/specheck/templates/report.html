@@ -1,0 +1,11 @@
+<!doctype html><html><head><meta charset="utf-8"><title>specheck report</title>
+<style>body{font:14px system-ui;margin:2rem}table{border-collapse:collapse;width:100%}
+td,th{border:1px solid #ccc;padding:.4rem;text-align:left}.fail{background:#fde8e8}.pass{background:#e8f6ec}</style></head><body>
+<h1>specheck report</h1>
+<p>Spec: <b>{{ spec.name }}</b> v{{ spec.version }} &middot; Document: <code>{{ label.path }}</code> (setId {{ label.set_id }}, v{{ label.version }})</p>
+<p>{{ findings|selectattr('status','equalto','fail')|list|length }} failed of {{ findings|length }} rules.</p>
+<table><tr><th>Rule</th><th>Status</th><th>Severity</th><th>Message</th><th>Evidence</th><th>Reference</th></tr>
+{% for f in findings %}<tr class="{{ f.status }}"><td>{{ f.rule_id }}</td><td>{{ f.status }}</td><td>{{ f.severity }}</td><td>{{ f.message }}</td><td>{{ f.evidence }}</td><td>{{ f.reference }}</td></tr>{% endfor %}
+</table>
+<p><small>Automated structural check. Not validated GxP software; not a substitute for regulatory review.</small></p>
+</body></html>
