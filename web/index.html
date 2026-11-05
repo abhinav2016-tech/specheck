@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>specheck</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--bd:#d8d8d8;--ok:#e8f6ec;--bad:#fde8e8;--skip:#f0f0f0;--acc:#0b5fff}
+@media (prefers-color-scheme:dark){:root{--bg:#14161a;--fg:#eee;--mut:#9aa;--bd:#333;--ok:#16301f;--bad:#3a1b1b;--skip:#222}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif}
+main{max-width:1100px;margin:0 auto;padding:24px 16px 64px}
+h1{margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}
+.card{border:1px solid var(--bd);border-radius:10px;padding:16px;margin:16px 0}
+.row{display:flex;gap:16px;flex-wrap:wrap}.row>*{flex:1 1 220px}
+label.drop{display:block;border:2px dashed var(--bd);border-radius:10px;padding:24px;text-align:center;cursor:pointer}
+label.drop:hover{border-color:var(--acc)}input[type=file]{display:none}
+.metrics{display:flex;gap:12px;flex-wrap:wrap}.m{flex:1 1 120px;border:1px solid var(--bd);border-radius:8px;padding:10px 14px}
+.m b{display:block;font-size:26px}.m span{color:var(--mut);font-size:13px}
+.PASS{color:#1a8f3c}.FAIL{color:#d93025}
+.tablewrap{overflow-x:auto}table{border-collapse:collapse;width:100%;min-width:720px}
+td,th{border:1px solid var(--bd);padding:6px 8px;text-align:left;vertical-align:top;font-size:13px}
+tr.pass{background:var(--ok)}tr.fail{background:var(--bad)}tr.skip{background:var(--skip)}
+button,.btn{background:var(--acc);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer;font:inherit}
+button.sec{background:transparent;color:var(--fg);border:1px solid var(--bd)}
+.note{font-size:13px;color:var(--mut)}#status{color:var(--mut)}code{font-size:13px}
+</style></head>
+<body><main>
+<h1>specheck</h1>
+<p class="sub">Verify an FDA SPL drug label against a machine-readable spec. Runs entirely in your browser; files are never uploaded.</p>
+<p id="status">Loading Python engine…</p>
+<div class="row">
+ <div><label class="drop" for="label"><b>SPL label (XML)</b><br><span class="note">click to choose, e.g. from dailymed.nlm.nih.gov</span></label>
+  <input id="label" type="file" accept=".xml" disabled></div>
+ <div><label class="drop" for="spec"><b>Custom spec (YAML, optional)</b><br><span class="note" id="specname">default: plr_label_v1</span></label>
+  <input id="spec" type="file" accept=".yaml,.yml" disabled></div>
+</div>
+<p><button class="sec" id="sample" disabled>Try the built-in sample label</button></p>
+<div id="out"></div>
+<p class="note">Not validated GxP software. Structural checks only; not a substitute for regulatory review.</p>
+</main>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+const $=id=>document.getElementById(id);let py,customSpec=null,lastLabel=null;
+async function init(){
+  py=await loadPyodide();
+  await py.loadPackage(["lxml","pyyaml","jinja2"]);
+  const man=await (await fetch("specheck/manifest.json")).json();
+  py.FS.mkdirTree("/pkg/specheck/templates");py.FS.mkdirTree("/pkg/specheck/specs");
+  for(const f of man){py.FS.writeFile("/pkg/specheck/"+f,await (await fetch("specheck/"+f)).text());}
+  py.runPython(`
+import sys; sys.path.insert(0,"/pkg")
+import json, tempfile
+from specheck.parser import parse_spl
+from specheck.rules import load_spec
+from specheck.engine import run, has_errors
+from specheck.report import to_html, to_json
+def check(xml, spec_text, name):
+    open("/tmp/label.xml","w").write(xml)
+    sp_path = "/pkg/specheck/specs/plr_label_v1.yaml"
+    if spec_text:
+        open("/tmp/spec.yaml","w").write(spec_text); sp_path="/tmp/spec.yaml"
+    spec=load_spec(sp_path); label=parse_spl("/tmp/label.xml"); label.path=name
+    f=run(spec,label)
+    return json.dumps({"json":json.loads(to_json(spec,label,f)),"html":to_html(spec,label,f),"error":has_errors(f),
+      "sections":[{"order":s.order,"depth":s.depth,"code":s.code,"title":s.title,"chars":len(s.full_text)} for s in label.sections],
+      "meta":{"setId":label.set_id,"version":label.version,"eff":label.effective_time}})
+`);
+  $("status").textContent="Engine ready.";
+  for(const id of ["label","spec","sample"])$(id).disabled=false;
+}
+function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function download(name,text,type){const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;a.click()}
+async function runCheck(xml,name){
+  $("out").innerHTML="";
+  let r;try{r=JSON.parse(py.globals.get("check")(xml,customSpec,name));}
+  catch(e){$("out").innerHTML=`<div class="card FAIL">Error: ${esc(String(e).split("\n").slice(-2).join(" "))}</div>`;return}
+  const f=r.json.findings,failed=f.filter(x=>x.status==="fail"),errs=failed.filter(x=>x.severity==="error");
+  $("out").innerHTML=`<div class="card"><div class="metrics">
+   <div class="m"><span>Verdict</span><b class="${r.error?"FAIL":"PASS"}">${r.error?"FAIL":"PASS"}</b></div>
+   <div class="m"><span>Errors</span><b>${errs.length}</b></div>
+   <div class="m"><span>Warnings/info</span><b>${failed.length-errs.length}</b></div>
+   <div class="m"><span>Rules run</span><b>${f.length}</b></div></div>
+   <p class="note">setId <code>${esc(r.meta.setId)}</code> · version ${esc(r.meta.version)} · effective ${esc(r.meta.eff)} · ${r.sections.length} sections</p>
+   <label><input type="checkbox" id="onlyfail"> show only failures</label>
+   <div class="tablewrap"><table id="tbl"></table></div>
+   <details><summary>Parsed sections</summary><div class="tablewrap"><table><tr><th>#</th><th>depth</th><th>code</th><th>title</th><th>chars</th></tr>
+   ${r.sections.map(s=>`<tr><td>${s.order}</td><td>${s.depth}</td><td>${esc(s.code)}</td><td>${esc(s.title)}</td><td>${s.chars}</td></tr>`).join("")}</table></div></details>
+   <p><button id="dh">Download HTML report</button> <button class="sec" id="dj">Download JSON report</button></p></div>`;
+  const draw=()=>{const only=$("onlyfail").checked;$("tbl").innerHTML="<tr><th>Rule</th><th>Status</th><th>Severity</th><th>Message</th><th>Evidence</th><th>Reference</th></tr>"+
+    f.filter(x=>!only||x.status==="fail").map(x=>`<tr class="${x.status}"><td>${esc(x.rule_id)}</td><td>${x.status}</td><td>${x.severity}</td><td>${esc(x.message)}</td><td>${esc(x.evidence)}</td><td>${esc(x.reference)}</td></tr>`).join("")};
+  $("onlyfail").onchange=draw;draw();
+  $("dh").onclick=()=>download("specheck_report.html",r.html,"text/html");
+  $("dj").onclick=()=>download("specheck_report.json",JSON.stringify(r.json,null,2),"application/json");
+}
+$("label").onchange=async e=>{const f=e.target.files[0];if(f)runCheck(await f.text(),f.name)};
+$("spec").onchange=async e=>{const f=e.target.files[0];customSpec=f?await f.text():null;$("specname").textContent=f?f.name:"default: plr_label_v1"};
+$("sample").onclick=async()=>runCheck(await (await fetch("sample_label.xml")).text(),"sample_label.xml");
+init().catch(e=>{$("status").textContent="Failed to load engine: "+e});
+</script></body></html>

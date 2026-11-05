@@ -6,3 +6,4 @@ data/raw/
 *.html
 !src/specheck/templates/*.html
 .vercel
+!web/index.html
