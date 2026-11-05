@@ -1,0 +1,7 @@
+pyproject.toml
+src
+tests
+data
+scripts
+.github
+pytest.ini

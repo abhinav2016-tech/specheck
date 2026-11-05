@@ -5,3 +5,4 @@ __pycache__/
 data/raw/
 *.html
 !src/specheck/templates/*.html
+.vercel
